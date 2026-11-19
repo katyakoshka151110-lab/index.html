@@ -1,2 +1,528 @@
 # index.html
 Сайт для игры в телеграм бот
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>🎮 Игровой хаб</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: radial-gradient(circle at 20% 20%, #1a0b3d, #05010a 70%);
+  color: #fff; overflow-x: hidden;
+}
+
+/* SCREENS */
+.screen { display: none; min-height: 100vh; padding: 20px 16px 40px; }
+.screen.active { display: flex; flex-direction: column; align-items: center; }
+#hub.active { display: block; }
+
+/* HUB */
+header { text-align: center; margin-bottom: 28px; }
+h1 {
+  font-size: 32px; font-weight: 900; letter-spacing: 1px;
+  background: linear-gradient(135deg, #a855f7, #22d3ee);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.sub { color: #8b7ca8; font-size: 13px; margin-top: 6px; }
+.games { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 24px 12px;
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: 18px; color: #fff; cursor: pointer;
+  box-shadow: 0 0 24px rgba(168, 85, 247, 0.15);
+  transition: transform .15s, box-shadow .15s;
+}
+.card:active { transform: scale(0.96); box-shadow: 0 0 30px rgba(34, 211, 238, 0.4); }
+.card-icon { font-size: 44px; }
+.card h2 { font-size: 16px; font-weight: 700; }
+.card p { font-size: 11px; color: #8b7ca8; text-align: center; }
+
+/* COMMON GAME UI */
+.back {
+  align-self: flex-start;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #fff; padding: 8px 16px; border-radius: 10px;
+  font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 16px;
+}
+.hud { display: flex; gap: 16px; font-size: 15px; font-weight: 700; margin-bottom: 14px; }
+.hud span { color: #22d3ee; }
+.btn {
+  background: linear-gradient(135deg, #a855f7, #22d3ee);
+  border: none; border-radius: 12px;
+  padding: 12px 28px; font-size: 15px; font-weight: 700; color: #05010a;
+  cursor: pointer; margin-top: 14px;
+}
+.msg { font-size: 14px; color: #8b7ca8; margin-top: 12px; }
+
+/* SNAKE */
+#snakeCanvas {
+  background: #0d0718;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: 14px;
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.25);
+  touch-action: none; display: block; max-width: 100%;
+}
+
+/* 2048 */
+#grid2048 {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 8px; padding: 8px;
+  background: rgba(168, 85, 247, 0.1);
+  border-radius: 14px;
+  width: min(92vw, 380px); aspect-ratio: 1;
+  touch-action: none;
+}
+.tile {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  font-size: clamp(20px, 6vw, 32px); font-weight: 900;
+  background: rgba(255,255,255,0.03); color: #fff;
+}
+
+/* TTT */
+#tttBoard {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px; width: min(92vw, 340px); aspect-ratio: 1;
+}
+.ttt-cell {
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: clamp(40px, 15vw, 70px); font-weight: 900;
+  color: #22d3ee; cursor: pointer; transition: background .1s;
+}
+.ttt-cell:active { background: rgba(168, 85, 247, 0.2); }
+.ttt-cell.o { color: #a855f7; }
+.ttt-cell.win { background: rgba(34, 211, 238, 0.25); }
+</style>
+</head>
+<body>
+
+<!-- HUB -->
+<div id="hub" class="screen active">
+  <header>
+    <h1>🎮 Игровой хаб</h1>
+    <p class="sub">выбирай и играй</p>
+  </header>
+  <main class="games">
+    <div class="card" onclick="openGame('snake')">
+      <div class="card-icon">🐍</div><h2>Змейка</h2><p>стрелки / свайпы</p>
+    </div>
+    <div class="card" onclick="openGame('g2048')">
+      <div class="card-icon">🔢</div><h2>2048</h2><p>складывай числа</p>
+    </div>
+    <div class="card" onclick="openGame('ttt')">
+      <div class="card-icon">❌⭕</div><h2>Крестики</h2><p>против ИИ</p>
+    </div>
+  </main>
+</div>
+
+<!-- SNAKE -->
+<div id="snake" class="screen">
+  <button class="back" onclick="goHub()">← Назад</button>
+  <div class="hud">Счёт: <span id="snakeScore">0</span> · Рекорд: <span id="snakeBest">0</span></div>
+  <canvas id="snakeCanvas"></canvas>
+  <div class="msg" id="snakeMsg">Свайп или стрелки</div>
+  <button class="btn" id="snakeRestart" style="display:none">Заново</button>
+</div>
+
+<!-- 2048 -->
+<div id="g2048" class="screen">
+  <button class="back" onclick="goHub()">← Назад</button>
+  <div class="hud">Счёт: <span id="score2048">0</span> · Рекорд: <span id="best2048">0</span></div>
+  <div id="grid2048"></div>
+  <div class="msg" id="msg2048">Свайпай, чтобы двигать</div>
+  <button class="btn" id="restart2048" style="display:none">Заново</button>
+</div>
+
+<!-- TIC TAC TOE -->
+<div id="ttt" class="screen">
+  <button class="back" onclick="goHub()">← Назад</button>
+  <div class="hud">Ты: <span>❌</span> · ИИ: <span>⭕</span></div>
+  <div id="tttBoard"></div>
+  <div class="msg" id="tttMsg">Твой ход</div>
+  <button class="btn" id="restartTTT">Заново</button>
+</div>
+
+<script>
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  tg.setBackgroundColor('#05010a');
+  tg.setHeaderColor('#05010a');
+  if (tg.BackButton) tg.BackButton.onClick(() => goHub());
+}
+
+function openGame(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(name).classList.add('active');
+  if (tg?.BackButton) tg.BackButton.show();
+  if (name === 'snake') resetSnake();
+  if (name === 'g2048') init2048();
+  if (name === 'ttt') resetTTT();
+}
+
+function goHub() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('hub').classList.add('active');
+  if (tg?.BackButton) tg.BackButton.hide();
+  if (snakeTimer) { clearInterval(snakeTimer); snakeTimer = null; }
+}
+
+/* ================= SNAKE ================= */
+const snakeCanvas = document.getElementById('snakeCanvas');
+const snakeCtx = snakeCanvas.getContext('2d');
+const snakeScoreEl = document.getElementById('snakeScore');
+const snakeBestEl = document.getElementById('snakeBest');
+const snakeMsgEl = document.getElementById('snakeMsg');
+const snakeRestartBtn = document.getElementById('snakeRestart');
+
+let snake, snakeDir, snakeNextDir, snakeFood, snakeScore, snakeAlive, snakeTimer;
+let snakeBest = +(localStorage.getItem('snakeBest') || 0);
+let snakeCols = 15, snakeRows = 15;
+const SNAKE_CELL = 20;
+snakeBestEl.textContent = snakeBest;
+
+function sizeSnakeCanvas() {
+  const size = Math.min(window.innerWidth - 32, window.innerHeight - 260, 380);
+  const n = Math.max(8, Math.floor(size / SNAKE_CELL));
+  snakeCanvas.width = snakeCanvas.height = n * SNAKE_CELL;
+  snakeCols = snakeRows = n;
+}
+
+function resetSnake() {
+  sizeSnakeCanvas();
+  snake = [{x: Math.floor(snakeCols/2), y: Math.floor(snakeRows/2)}];
+  snakeDir = {x: 1, y: 0};
+  snakeNextDir = snakeDir;
+  snakeScore = 0;
+  snakeAlive = true;
+  snakeScoreEl.textContent = 0;
+  snakeMsgEl.textContent = 'Свайп или стрелки';
+  snakeRestartBtn.style.display = 'none';
+  placeSnakeFood();
+  clearInterval(snakeTimer);
+  snakeTimer = setInterval(snakeTick, 140);
+  drawSnake();
+}
+
+function placeSnakeFood() {
+  while (true) {
+    const f = {x: Math.floor(Math.random()*snakeCols), y: Math.floor(Math.random()*snakeRows)};
+    if (!snake.some(s => s.x === f.x && s.y === f.y)) { snakeFood = f; return; }
+  }
+}
+
+function snakeTick() {
+  snakeDir = snakeNextDir;
+  const head = {x: snake[0].x + snakeDir.x, y: snake[0].y + snakeDir.y};
+  if (head.x < 0 || head.y < 0 || head.x >= snakeCols || head.y >= snakeRows ||
+      snake.some(s => s.x === head.x && s.y === head.y)) {
+    return snakeDie();
+  }
+  snake.unshift(head);
+  if (head.x === snakeFood.x && head.y === snakeFood.y) {
+    snakeScore++;
+    snakeScoreEl.textContent = snakeScore;
+    placeSnakeFood();
+  } else {
+    snake.pop();
+  }
+  drawSnake();
+}
+
+function snakeDie() {
+  snakeAlive = false;
+  clearInterval(snakeTimer);
+  if (snakeScore > snakeBest) {
+    snakeBest = snakeScore;
+    localStorage.setItem('snakeBest', snakeBest);
+    snakeBestEl.textContent = snakeBest;
+  }
+  snakeMsgEl.textContent = '💀 Игра окончена';
+  snakeRestartBtn.style.display = 'inline-block';
+}
+
+function drawSnake() {
+  snakeCtx.fillStyle = '#0d0718';
+  snakeCtx.fillRect(0, 0, snakeCanvas.width, snakeCanvas.height);
+  snakeCtx.fillStyle = '#ff3b6b';
+  snakeCtx.shadowColor = '#ff3b6b'; snakeCtx.shadowBlur = 12;
+  snakeCtx.beginPath();
+  snakeCtx.arc(snakeFood.x*SNAKE_CELL + SNAKE_CELL/2, snakeFood.y*SNAKE_CELL + SNAKE_CELL/2, SNAKE_CELL/2 - 2, 0, Math.PI*2);
+  snakeCtx.fill();
+  snakeCtx.shadowBlur = 0;
+  snake.forEach((s, i) => {
+    snakeCtx.fillStyle = i === 0 ? '#22d3ee' : '#a855f7';
+    snakeCtx.shadowColor = i === 0 ? '#22d3ee' : '#a855f7';
+    snakeCtx.shadowBlur = 10;
+    snakeCtx.fillRect(s.x*SNAKE_CELL + 1, s.y*SNAKE_CELL + 1, SNAKE_CELL - 2, SNAKE_CELL - 2);
+  });
+  snakeCtx.shadowBlur = 0;
+}
+
+function setSnakeDir(x, y) {
+  if (!snakeAlive) return;
+  if (snakeDir.x === -x && snakeDir.y === -y) return;
+  snakeNextDir = {x, y};
+}
+
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('snake').classList.contains('active')) return;
+  const map = {ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0], w:[0,-1], s:[0,1], a:[-1,0], d:[1,0]};
+  if (map[e.key]) { e.preventDefault(); setSnakeDir(...map[e.key]); }
+});
+
+let snakeSx = 0, snakeSy = 0;
+snakeCanvas.addEventListener('touchstart', e => { snakeSx = e.touches[0].clientX; snakeSy = e.touches[0].clientY; }, {passive:true});
+snakeCanvas.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - snakeSx;
+  const dy = e.changedTouches[0].clientY - snakeSy;
+  if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+  if (Math.abs(dx) > Math.abs(dy)) setSnakeDir(dx > 0 ? 1 : -1, 0);
+  else setSnakeDir(0, dy > 0 ? 1 : -1);
+}, {passive:true});
+
+snakeRestartBtn.addEventListener('click', resetSnake);
+
+/* ================= 2048 ================= */
+const grid2048 = document.getElementById('grid2048');
+const score2048El = document.getElementById('score2048');
+const best2048El = document.getElementById('best2048');
+const msg2048El = document.getElementById('msg2048');
+const restart2048Btn = document.getElementById('restart2048');
+
+let board2048 = [];
+let score2048 = 0;
+let best2048 = +(localStorage.getItem('best2048') || 0);
+let over2048 = false;
+best2048El.textContent = best2048;
+
+const tileColors = {
+  2: ['#3b2e6b','#fff'], 4: ['#4c3b8a','#fff'], 8: ['#7c3aed','#fff'],
+  16: ['#a855f7','#fff'], 32: ['#d946ef','#fff'], 64: ['#ec4899','#fff'],
+  128: ['#f43f5e','#fff'], 256: ['#f97316','#fff'], 512: ['#eab308','#0a0a0a'],
+  1024: ['#22d3ee','#0a0a0a'], 2048: ['#10b981','#0a0a0a']
+};
+
+function init2048() {
+  board2048 = Array(16).fill(0);
+  score2048 = 0; over2048 = false;
+  score2048El.textContent = 0;
+  msg2048El.textContent = 'Свайпай, чтобы двигать';
+  restart2048Btn.style.display = 'none';
+  spawn2048(); spawn2048();
+  render2048();
+}
+
+function spawn2048() {
+  const empty = [];
+  board2048.forEach((v, i) => { if (v === 0) empty.push(i); });
+  if (!empty.length) return;
+  const idx = empty[Math.floor(Math.random()*empty.length)];
+  board2048[idx] = Math.random() < 0.9 ? 2 : 4;
+}
+
+function slideLine(vals) {
+  const nz = vals.filter(v => v !== 0);
+  const out = []; let score = 0; let i = 0;
+  while (i < nz.length) {
+    if (i+1 < nz.length && nz[i] === nz[i+1]) { out.push(nz[i]*2); score += nz[i]*2; i += 2; }
+    else { out.push(nz[i]); i++; }
+  }
+  while (out.length < 4) out.push(0);
+  return {out, score};
+}
+
+function move2048(dir) {
+  if (over2048) return;
+  const lines = [];
+  if (dir === 'left' || dir === 'right') {
+    for (let r = 0; r < 4; r++) {
+      const line = [r*4, r*4+1, r*4+2, r*4+3];
+      lines.push(dir === 'right' ? line.slice().reverse() : line);
+    }
+  } else {
+    for (let c = 0; c < 4; c++) {
+      const line = [c, c+4, c+8, c+12];
+      lines.push(dir === 'down' ? line.slice().reverse() : line);
+    }
+  }
+  let moved = false, totalScore = 0;
+  for (const line of lines) {
+    const vals = line.map(i => board2048[i]);
+    const {out, score} = slideLine(vals);
+    totalScore += score;
+    line.forEach((idx, k) => {
+      if (board2048[idx] !== out[k]) moved = true;
+      board2048[idx] = out[k];
+    });
+  }
+  if (moved) {
+    score2048 += totalScore;
+    score2048El.textContent = score2048;
+    if (score2048 > best2048) {
+      best2048 = score2048;
+      localStorage.setItem('best2048', best2048);
+      best2048El.textContent = best2048;
+    }
+    spawn2048(); render2048(); check2048GameOver();
+  }
+}
+
+function render2048() {
+  grid2048.innerHTML = '';
+  board2048.forEach(v => {
+    const cell = document.createElement('div');
+    cell.className = 'tile';
+    if (v) {
+      cell.textContent = v;
+      const [bg, fg] = tileColors[v] || ['#10b981','#fff'];
+      cell.style.background = bg;
+      cell.style.color = fg;
+    }
+    grid2048.appendChild(cell);
+  });
+}
+
+function canMove2048() {
+  if (board2048.includes(0)) return true;
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const v = board2048[r*4+c];
+      if (c < 3 && v === board2048[r*4+c+1]) return true;
+      if (r < 3 && v === board2048[(r+1)*4+c]) return true;
+    }
+  }
+  return false;
+}
+
+function check2048GameOver() {
+  if (!canMove2048()) {
+    over2048 = true;
+    msg2048El.textContent = '💀 Игра окончена';
+    restart2048Btn.style.display = 'inline-block';
+  }
+}
+
+let g2Sx = 0, g2Sy = 0;
+grid2048.addEventListener('touchstart', e => { g2Sx = e.touches[0].clientX; g2Sy = e.touches[0].clientY; }, {passive:true});
+grid2048.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - g2Sx;
+  const dy = e.changedTouches[0].clientY - g2Sy;
+  if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+  if (Math.abs(dx) > Math.abs(dy)) move2048(dx > 0 ? 'right' : 'left');
+  else move2048(dy > 0 ? 'down' : 'up');
+}, {passive:true});
+
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('g2048').classList.contains('active')) return;
+  const map = {ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', w:'up', s:'down', a:'left', d:'right'};
+  if (map[e.key]) { e.preventDefault(); move2048(map[e.key]); }
+});
+
+restart2048Btn.addEventListener('click', init2048);
+
+/* ================= TIC TAC TOE ================= */
+const tttBoard = document.getElementById('tttBoard');
+const tttMsg = document.getElementById('tttMsg');
+const tttRestartBtn = document.getElementById('restartTTT');
+
+let ttt, tttActive, tttBusy;
+const winLines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+function resetTTT() {
+  ttt = Array(9).fill('');
+  tttActive = true; tttBusy = false;
+  tttMsg.textContent = 'Твой ход (❌)';
+  renderTTT();
+}
+
+function renderTTT() {
+  tttBoard.innerHTML = '';
+  ttt.forEach((v, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'ttt-cell';
+    if (v === 'O') cell.classList.add('o');
+    cell.textContent = v;
+    cell.addEventListener('click', () => onTTTClick(i));
+    tttBoard.appendChild(cell);
+  });
+}
+
+function onTTTClick(i) {
+  if (!tttActive || tttBusy || ttt[i] !== '') return;
+  ttt[i] = 'X';
+  renderTTT();
+  if (checkTTTEnd()) return;
+  tttBusy = true;
+  tttMsg.textContent = 'ИИ думает...';
+  setTimeout(() => {
+    aiMoveTTT();
+    tttBusy = false;
+    checkTTTEnd();
+  }, 250);
+}
+
+function findWinningMove(player) {
+  for (const line of winLines) {
+    const vals = line.map(i => ttt[i]);
+    if (vals.filter(v => v === player).length === 2 && vals.filter(v => v === '').length === 1) {
+      return line[vals.indexOf('')];
+    }
+  }
+  return -1;
+}
+
+function aiMoveTTT() {
+  if (!tttActive) return;
+  if (!document.getElementById('ttt').classList.contains('active')) return;
+  let idx = findWinningMove('O');
+  if (idx === -1) idx = findWinningMove('X');
+  if (idx === -1 && ttt[4] === '') idx = 4;
+  if (idx === -1) {
+    const corners = [0,2,6,8].filter(i => ttt[i] === '');
+    if (corners.length) idx = corners[Math.floor(Math.random()*corners.length)];
+  }
+  if (idx === -1) {
+    const empty = ttt.map((v,i)=>v===''?i:-1).filter(i=>i>=0);
+    if (empty.length) idx = empty[Math.floor(Math.random()*empty.length)];
+  }
+  if (idx === -1) return;
+  ttt[idx] = 'O';
+  renderTTT();
+}
+
+function checkTTTEnd() {
+  for (const line of winLines) {
+    const [a,b,c] = line;
+    if (ttt[a] && ttt[a] === ttt[b] && ttt[a] === ttt[c]) {
+      tttActive = false;
+      line.forEach(i => tttBoard.children[i].classList.add('win'));
+      tttMsg.textContent = ttt[a] === 'X' ? '🎉 Победа!' : '😢 ИИ победил';
+      return true;
+    }
+  }
+  if (ttt.every(v => v !== '')) {
+    tttActive = false;
+    tttMsg.textContent = '🤝 Ничья';
+    return true;
+  }
+  if (tttActive) tttMsg.textContent = 'Твой ход (❌)';
+  return false;
+}
+
+tttRestartBtn.addEventListener('click', resetTTT);
+</script>
+</body>
+  </html>
